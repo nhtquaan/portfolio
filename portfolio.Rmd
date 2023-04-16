@@ -1,0 +1,636 @@
+---
+title: "Searching for talented students: A data analysis portfolio"
+author: "Nguyen Huy Tu Quan"
+date: "2023-04-16"
+output: 
+  html_document:
+    theme: united
+    number_sections: true
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Hi, my name is Nguyen Huy Tu Quan. In this portfolio, I will create an scenario which is similar to those FUV may often face. This scenario allow me to illustrate my abilities to ask the right question, collect and process the useful data, and then conduct data analysis to help inform the decisions made by the University.
+
+## The scenario
+
+Motivated by disappointment about the poor quality of the current education system in Colombia, especially in the technology and engineering sector, professors and scholars around the country convened in Bogotá capital city to discuss solutions. Together, they decided to create a new and non-profit University aiming at teaching technology and engineering excellently. They named it after the city where the unthinkable aspiration started - the Bogotá University of Technology and Science (BUST).
+
+With the participation of great talents from all over the country, BUST is undoubtedly a University of great potential. But as every great project starts with a small but firm step, the University first need to determine enrollment and scholarship policies for the University. After discussion, the Board of Trustees resolved that the University would focus on high school students with the most significant potential to perform academically and practically well before entering the labour market. They then assign the University's provost to propose a detailed enrollment plan to achieve this goal.
+
+## The question
+
+Supporting the provost was a team of data analysts. These people understand the importance of asking the right question from the start. And they ask as follows:
+
+*What are the characteristics of high school students accompanying academic and practice competency?*
+
+Since the first enrollment of BUST has yet to start, and the University does not have any data about its students (they have yet to attend BUST), they decided that they need to look outside for data. After a brief research, they found a data set containing the SABER Pro score - a popular exam conducted during the senior year at University in Colombia. They learned that SABER Pro is a comprehensive test evaluating various students' skills and knowledge, including writing, quantitative, English skills, and citizen competency. Therefore, the SABER Pro score can be used as an indicator of the "academic and practice competence" of students.
+
+In this context, the above question was refined as follows:
+
+***What are the characteristics of high school students accompanying a high SABER Pro score?***
+
+## The data set
+
+```{r Load Library, include=FALSE}
+# Load libraries
+pacman::p_load(tidyverse, readxl, 
+               jtools,
+               ggplot2, ggthemes, ggpubr, ggridges, plotly, # Library for plots
+               paletteer, # color
+               summarytools, # For making summary table
+               viridis, RColorBrewer, jtools, janitor, broom.mixed, vtable) 
+```
+
+```{r Load Data, include=FALSE, cache=TRUE}
+
+# Load data
+original_data = read_excel("C:/Users/nguye/Desktop/Applications/FUV - Data Coordinator/Portfolio/Colombia data_academic_performance.xlsx")
+```
+
+The Data set used, namely *"Data set of academic performance evolution for engineering students"*, was obtained by orderly crossing the databases of the Colombian Institute for the Evaluation of Education and the data collection was conducted by Delahoz-Dominguez et al. (2020).
+
+The data set contains academic performance information of 12,411 engineering students studying at different Colombian universities. Specifically, it provides students' scores in the high school graduation exam, SABER 11. In addition, it also provides the scores in a professional exam conducted in the last year of university, SABER Pro.
+
+The data set also includes information about the social and economic background of the students, such as parents' education and occupation, household income, number of people living in the household, the availability of internet and computer, ownership nature of students' high schools (private or public owned), and socioeconomic level of students place of residence.
+
+The data set includes 44 different variables. However, for simplification, I am going to use only 10 variables as described following:
+
+| No. |     Variable name     | Description                                                                                                         |
+|:----------------:|:----------------:|:----------------------------------|
+|  1  |       `sc_pro`        | Student's global SABER Pro score. In the original data, this variable was named as `global_sc`.                     |
+|  2  |       `sc_s11`        | Student's average high school graduation (SABER 11) score. The number 11 means the exam is conducted at 11th grade. |
+|  3  |       `female`        | Is the student a female person? (1 for female, 0 for male).                                                         |
+|  4  |     `edu_father`      | Education level of student's father.                                                                                |
+|  5  |     `edu_mother`      | Education level of student's mother.                                                                                |
+|  6  |       `income`        | Family's income.                                                                                                    |
+|  7  |      `internet`       | Internet availability at home (1 for available, 0 for unavailable).                                                 |
+|  8  |         `sel`         | Socioeconomic level of student's place of residence (1 is lowest and 4 is highest).                                 |
+|  9  |       `sel_ihe`       | Social economic level of university's campus.                                                                       |
+| 10  | `private_high_school` | Did the student come from private high school (also known as "upper high school") (1 for Yes, 0 for No).            |
+
+The data set could be assessed at [Mendeley Data](https://data.mendeley.com/datasets/83tcx8psxv/1), and a detailed description of the data set can be found [here](https://drive.google.com/file/d/1vyotqUP1tUYzT1wfcw7MREeEQ3krnyiz/view?usp=sharing).
+
+```{r Data Processing, include = FALSE, cache = TRUE}
+data = original_data %>% clean_names()
+
+data = data %>% 
+  mutate(sc_s11 = (mat_s11 + cr_s11 + cc_s11 + bio_s11 + eng_s11)/5)
+
+data = data %>%
+  select(sc_s11, g_sc, gender, school_nat, edu_father, edu_mother, revenue, people_house, computer, internet, sel, sel_ihe, occ_father, occ_mother, stratum, academic_program, job, school_type)
+
+# Prepocessing data
+data = data %>%
+  rename(sc_pro = g_sc,
+         income = revenue)
+
+
+data = data %>%
+  mutate(zsc_s11 = (sc_s11 - mean(sc_s11))/sd(sc_s11), # Z score of SABE 11
+         zsc_pro = (sc_pro - mean(sc_pro))/sd(sc_pro),# Zscore of Pro
+         zsc_change = zsc_pro - zsc_s11) # Change in zscore
+
+data = data %>%
+  mutate(gender = case_when(gender == "F" ~ 1,
+                            gender == "M" ~ 0)) %>%
+  rename(female = gender)
+
+data = data %>%
+  mutate(school_nat = case_when(school_nat == "PRIVATE" ~ 1,
+                                school_nat == "PUBLIC" ~ 0)) %>%
+  rename(private_high_school = school_nat)
+
+data = data %>%
+  mutate(income = case_when(income == "less than 1 LMMW" ~ "0-1",
+                             income == "Between 1 and less than 2 LMMW" ~ "1-2",
+                             income == "Between 2 and less than 3 LMMW" ~ "2-3",
+                             income == "Between 3 and less than 5 LMMW" ~ "3-5",
+                             income == "Between 5 and less than 7 LMMW" ~ "5-7",
+                             income == "Between 7 and less than 10 LMMW" ~ "7-10",
+                             income == "10 or more LMMW" ~ "Above 10"))
+
+data = data %>%
+  mutate(computer = case_when(computer == "Yes" ~ 1,
+                              computer == "No" ~ 0),
+         internet = case_when(internet == "Yes" ~ 1,
+                              internet == "No" ~ 0))
+
+data = data %>%
+  mutate(edu_father_n = case_when(edu_father %in% c("Ninguno", "Incomplete primary") ~ 1, # Under Primary
+                                edu_father %in% c("Complete primary", "Incomplete Secundary") ~ 2, # Primary
+                                edu_father %in% c("Complete Secundary", "Incomplete Professional Education") ~ 3, # Lower-Secondary
+                                edu_father %in% c("Complete professional education", "Incomplete technical or technological") ~ 4, # Upper-Secondary
+                                edu_father %in% c("Complete technique or technology", "Postgraduate education") ~ 5), # tertiary 
+         edu_mother_n = case_when(edu_mother %in% c("Ninguno", "Incomplete primary") ~ 1, # Under Primary
+                                edu_mother %in% c("Complete primary", "Incomplete Secundary") ~ 2, # Primary
+                                edu_mother %in% c("Complete Secundary", "Incomplete Professional Education") ~ 3, # Lower-Secondary
+                                edu_mother %in% c("Complete professional education", "Incomplete technical or technological") ~ 4, # Upper-Secondary
+                                edu_mother %in% c("Complete technique or technology", "Postgraduate education") ~ 5)) %>%
+  rowwise() %>%
+  mutate(highest_edu_parent = case_when(max(edu_father_n, edu_mother_n) == 5 ~ "3. Tertiary",
+                                         max(edu_father_n, edu_mother_n) == 4 ~ "2b. Upper Secondary",
+                                         max(edu_father_n, edu_mother_n) == 3 ~ "2a. Lower Secondary",
+                                         max(edu_father_n, edu_mother_n) == 2 ~ "1. Primary",
+                                         max(edu_father_n, edu_mother_n) == 1 ~ "0. Under Primary")) %>%
+  mutate(edu_father = case_when(edu_father_n == 5 ~ "3. Tertiary",
+                                 edu_father_n == 4 ~ "2b. Upper Secondary",
+                                 edu_father_n == 3 ~ "2a. Lower Secondary",
+                                 edu_father_n == 2 ~ "1. Primary",
+                                 edu_father_n == 1 ~ "0. Under Primary"),
+          edu_mother = case_when(edu_mother_n == 5 ~ "3. Tertiary",
+                                 edu_mother_n == 4 ~ "2b. Upper Secondary",
+                                 edu_mother_n == 3 ~ "2a. Lower Secondary",
+                                 edu_mother_n == 2 ~ "1. Primary",
+                                 edu_mother_n == 1 ~ "0. Under Primary"))
+```
+
+```{r Label data, include=FALSE, cache = TRUE, eval=FALSE}
+library("expss")
+data = data %>%
+  apply_labels(sc_s11 = "SABER 11 score",
+               sc_pro = "SABER Pro score",
+               female = "Is female",
+               edu_father = "Father's education level",
+               edu_mother = "Mother's education level",
+               income = "Family income",
+               people_house = "Number of people living in the household",
+               computer = "Computer availability",
+               internet = "Internet availability",
+               private_high_school = "Did student studied private high school?",
+               sel = "Social-economic level of students' neiborhood")
+```
+
+# Descriptive Statistics
+
+First, we will implement uni-variate analysis to understand key variables in the data set better.
+
+## The response variable: SABER Pro score
+
+SABER Pro score is the variable that this data analysis aims to explain. The graph below shows the distribution of the SABER Pro score, which ranges from 37 to 247 points. Of the 12411 students surveyed, half had scores ranging from 147 (25th percentile) to 179 (75th percentile). The median score is 163.
+
+```{r SABER Pro score dist, echo=FALSE, cache = TRUE, message=FALSE, warning=FALSE, out.width='75%'}
+
+fig1 = ggplot(data = data, aes(x = sc_pro)) +
+  geom_histogram(aes(y = ..density..), fill='steelblue2')+
+  geom_density(color = "#072859") +
+  labs(title = "Distribution of SABER Pro score",
+       x = "Score",
+       y = "Count")
+
+
+
+fig2 = plot_ly(data, x = ~sc_pro, type = "box", 
+                     name = "Score", 
+                     line = list(color = 'rgb(7,40,89)'),
+                     marker = list(color = 'rgb(7,40,89)'))
+
+subplot(ggplotly(fig1),
+        fig2,
+        nrows = 2)
+```
+
+```{r SABER Pro score, eval = FALSE, echo=FALSE, cache = TRUE, message=FALSE, warning=FALSE, out.width='70%'}
+
+s <- subplot(plot_ly(data, x = ~sc_pro, type = "box", 
+                     name = "Score", 
+                     line = list(color = 'rgb(7,40,89)'),
+                     marker = list(color = 'rgb(7,40,89)')),
+             plotly_empty(),
+             
+             plot_ly(data, x = ~sc_pro, 
+                     type = "histogram", 
+                     name = "Score", 
+                     fill = '#ab63fa') %>%
+               layout(showlegend = FALSE),
+             nrows = 2, heights = c(0.2, 0.8), widths = c(0.8, 0.2),
+             shareX = TRUE) %>%
+  layout(title = list('SABER Score distribution and boxplot', xanchor = "left"),
+         xaxis = list(title = 'SABER Pro Score'))
+
+# show box/hist subplot
+layout(s)
+
+```
+
+## Predictors {.tabset}
+
+### Notable figures
+
+From the statistics table on the right tab, we find some notable figures as follows:
+
+-   SABER 11 scores range from 25.8 to 95.6 points. The average number is 62.3 points, with a standard deviation of 9.6 points. The median score is 61.8 points.
+
+-   Among the students in the data set, 59.4% are female, and 40.6% are male. Regarding parents' education, approximately half of the students have parents who either completed upper secondary school or university.
+
+-   Regarding family income, one-third of the students come from families whose income ranges from 1 to 2 minimum monthly wages (MMWs). At the 2nd place, 23 per cent of students' families earn between 2 and 3 MMWs. Only 18.5 per cent of students have family income of 5 to 7 MMWs. Each remaining group account for less than 10 per cent of the total sample.
+
+-   There are 53 per cent of students come from private high schools.
+
+-   Internet access is popular among engineering students, with 78.6 per cent having Internet connection at home.
+
+-   Regarding the socioeconomic levels of students' place of living, most of them live in level 2 (38,2 per cent) and level 4 (32,6 per cent) areas. Meanwhile for the case of universities, more than 60% of them locate in area with socioeconomic level 2.
+
+### Full statistics table
+
+```{r dfSummary, echo=FALSE, results = 'ascii', message=FALSE, warning=FALSE}
+Predictors = data %>%
+  select(sc_s11, female, income, edu_father, edu_father, internet, private_high_school, sel, sel_ihe)
+
+
+Summary_Table = dfSummary(Predictors, 
+                          plain.ascii = FALSE,
+                          valid.col = FALSE, 
+                          na.col = FALSE,
+                          col.widths = c(35, 35, 35, 35),
+                          headings = FALSE,
+                          tmp.img.dir = "/tmp", 
+                          varnumbers = FALSE,
+                          graph.magnif = 0.85,
+                          caption="Table 1. Summary of data frame",
+                          style = 'grid')
+print(Summary_Table, method = 'render')
+
+```
+
+# Two-variables analysis
+
+## SABER 11 as a predictor {.tabset}
+
+This section will examine the relations between the SABER Pro score and other predictor variables. One of the strongest indicators of present academic performance (SABER Pro score) is its predecessor (SABER 11 score). The scatter-plot on the left shows a strong correlation between the two, that students with higher SABER 11 scores tend to have higher scores on the SABER Pro examination several years later. Furthermore, the contour chart on the right presents the density of data points according to colours (blue represents low density, yellow represents high density) and thereby helps us see the trend more clearly. From this chart, we can see that the contour lines align well with the direction of the trend line in orange.
+
+*Note: In the following scatter plots, R means correlation coefficient. The closer R is to 1 or -1, the stronger the correlation. Meanwhile, p-value shows the confidence level of the estimation of R. p-value close to 0 (zero) indicates a high level of confidence.*
+
+```{r SABER 11 score vs. SABER Pro score, echo=FALSE, message=FALSE, warning=FALSE, out.width='80%', cache = TRUE}
+data %>%
+  ggplot() +
+  geom_point(aes(x = sc_s11, y = sc_pro), alpha = 0.2, color = "orange") +
+  stat_cor(aes(x = sc_s11, y = sc_pro), method = "pearson") +
+  geom_smooth(aes(x = sc_s11, y = sc_pro), method='lm',level=0.95, formula= y~x) +
+  labs(title = "SABER 11 and SABER Pro",
+       x = "SABER 11 score",
+       y = "SABER Pro score") -> fig1
+
+data %>% 
+  ggplot(aes(x=sc_s11, y = sc_pro)) +
+  geom_density_2d_filled(show.legend = FALSE) +
+  geom_smooth(aes(x = sc_s11, y = sc_pro), method='lm',level=0.95, formula= y~x+x**2, color = "orange") +
+  coord_cartesian(expand = FALSE) + 
+  labs(title = "",
+       x = "SABER 11 score",
+       y = "") -> fig2
+
+ggarrange(fig1, fig2)
+```
+
+But we may wonder whether this positive association still hold consistently in different subsets of the data set. Therefore, it is necessary to create the above scatter plots for different sample subsets to see if the trend is still there.
+
+
+### Income subsets
+
+Across all income groups, students with high SABER 11 scores also tend to have high SABER Pro scores. The correlation coefficient R ranges from 0.65 to 0.76, suggesting a strong correlation. Furthermore, the computed p value is minimal, at less than $2.2*10^{-6}$, showing a high level of statistical significance.
+
+```{r, echo = FALSE, out.width = '80%', cache = TRUE}
+data %>%
+  filter(is.na(income) == FALSE) %>%
+  ggplot() +
+  geom_point(aes(x = sc_s11, y = sc_pro), alpha = 0.2, color = "violetred") +
+  stat_cor(aes(x = sc_s11, y = sc_pro), method = "pearson") +
+  geom_smooth(aes(x = sc_s11, y = sc_pro), method='lm',level=0.95, formula= y~x) +
+  facet_wrap(income~.) +
+  labs(title = "SABER 11-Pro Correlation in different income groups",
+       x = "SABER 11 score",
+       y = "SABER Pro score")
+```
+
+### Gender and Highschool subsets
+
+Similarly, there is a strong correlation between SABER 11 and SABER Pro scores appearing consistently across different combinations of gender and high school ownership type.
+
+```{r, echo = FALSE, out.width = '80%', cache=TRUE}
+
+# Create label for female
+female_labs = c("Female", 'Male')
+names(female_labs) = c("1", "0")
+
+# Create label for private_high_school
+school_labs = c("Private high school", "Public high school")
+names(school_labs) = c("1", "0")
+
+data %>%
+  filter(is.na(income) == FALSE) %>%
+  ggplot(aes(x = sc_s11, y = sc_pro)) +
+  geom_point(alpha = 0.2, color = "tomato1") +
+  stat_cor(method = "pearson") +
+  geom_smooth(method='lm',level=0.95, formula= y~x) +
+  facet_wrap(female~private_high_school,
+             labeller = labeller(female = female_labs, 
+                                 private_high_school = school_labs)) +
+  labs(title = "SABER 11-Pro Correlation in different gender-high school groups",
+       x = "SABER 11 score",
+       y = "SABER Pro score")
+```
+
+### Socioeconomic levels subsets
+
+Also, we can find the same trend in different socioeconomic level groups.
+
+```{r, echo = FALSE, out.width = '80%', cache=TRUE}
+data %>%
+  filter(is.na(income) == FALSE) %>%
+  ggplot() +
+  geom_point(aes(x = sc_s11, y = sc_pro), alpha = 0.2, color = "cadetblue4") +
+  stat_cor(aes(x = sc_s11, y = sc_pro), method = "pearson") +
+  geom_smooth(aes(x = sc_s11, y = sc_pro), method='lm',level=0.95, formula= y~x) +
+  facet_wrap(sel~.) +
+  labs(title = "SABER 11-Pro Correlation in different SEL",
+       x = "SABER 11 score",
+       y = "SABER Pro score")
+```
+
+### Parents highest education subsets
+
+Similarly, SABER 11 score remains an important indicator of SABER Pro score regardless of the parent's highest educational level.
+
+```{r, echo = FALSE, out.width = '80%', cache=TRUE}
+data %>%
+  filter(is.na(highest_edu_parent) == FALSE) %>%
+  ggplot() +
+  geom_point(aes(x = sc_s11, y = sc_pro), alpha = 0.2, color = "royalblue") +
+  stat_cor(aes(x = sc_s11, y = sc_pro), method = "pearson") +
+  geom_smooth(aes(x = sc_s11, y = sc_pro), method='lm',level=0.95, formula= y~x, color = "red") +
+  facet_wrap(highest_edu_parent~.) +
+  labs(title = "SABER 11-Pro Correlation in different groups of parents' education",
+       x = "SABER 11 score",
+       y = "SABER Pro score")
+```
+
+## Other predictors {.tabset}
+
+So we already know that the SABER 11 score is an important indicator of a student's academic competency and thus can be used to predict the SABER Pro score.
+
+However, there is likely more than one predictor of students' SABER Pro scores. In other words, students with the same SABER 11 scores but have different demographic features may perform differently on the SABER Pro examination. Therefore, in the following sections, we will inspect if there is any association between these demographic factors and the SABER Pro score. The method we will use is to divide the sample into different subsets according to each factor, such as gender, family income, etc. then compare the score distribution of each subset to see if there is any systematic difference across subsets.
+
+### Gender
+
+By zooming in on the chart below, we can see that the box plot of male students' scores is higher than that of female students, indicating that male students perform slightly better on the SABER Pro examination. Specifically, the median score of male students is 164 points, whereas the same number of female students is 2 points lower. For female students, the 25th percentile score is 146, and the 75th percentile score is 177. Meanwhile, the same figures for male students are 147 and 180 respectively, which are higher than those of their female peers.
+
+```{r Gender vs. score, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, out.height= '65%', out.width='65%'}
+
+#Boxplot
+data %>%
+  ggplot() +
+  geom_boxplot(aes(y = sc_pro, x = factor(female,
+                                          level = c(0, 1),
+                                          labels = c("Male", "Female")), 
+                   fill = factor(female,
+                                 level = c(0, 1),
+                                 labels = c("Male", "Female")))) +
+  labs(x = "",
+       y = "Count",
+       fill = "Gender",
+       title = "Gender and Score")  -> fig
+
+ggplotly(fig)
+```
+
+### Family income
+
+We can see from the chart below that the scores distributions of wealthier students skew systematically to the right compared to those from lower-income families. This pattern suggests that students from richer families associate with higher SABER Pro scores.
+
+```{r SABER Pro - Income, histogram, message=FALSE, warning=FALSE, cache=TRUE, echo=FALSE, out.width="70%"}
+# Histogram
+data %>%
+  filter(is.na(income) == FALSE) %>%
+  ggplot(aes(x=sc_pro, y = income, fill = stat(x))) +
+  geom_density_ridges_gradient() +
+  scale_fill_viridis_c(name = "Score", option = "C") +
+  labs(title = "Income and score",
+       x = "SABER Pro score",
+       y = "Family income")
+
+```
+
+### Students' SEL
+
+Similarly, students from areas with better socioeconomic conditions, as demonstrated by higher socioeconomic levels, tend to score higher on the SABER Pro examination.
+
+```{r SABER Pro - Sel, histogram, message=FALSE, warning=FALSE, cache=TRUE, echo=FALSE, out.width="70%"}
+# Histogram
+data %>%
+  ggplot(aes(x=sc_pro, y = factor(sel), fill = stat(x))) +
+  geom_density_ridges_gradient() +
+  scale_fill_viridis(name = "Score", option = "D") +
+  labs(title = "SEL and score",
+       x = "SABER Pro score",
+       y = "socioeconomic level")
+
+```
+
+### University's SEL
+
+The figure below shows that students from high socioeconomic level universities tend to have score distributions skew to the right. This phenomenon can be explained as follows: socioeconomic levels represent the levels of economic development, availability of infrastructure, and population density of the campus's area. Universities located at high socioeconomic levels are likely to have better access to talented lecturers and skilled staff and tend to have larger budgets. To some extent, the socioeconomic level of a university is an indicator of its education quality and, therefore, can impact students' performance positively.
+
+```{r Score and Socioeconomic level of university, histogram, message=FALSE, warning=FALSE, cache=TRUE, echo=FALSE, out.width="70%"}
+# Histogram
+data %>%
+  ggplot(aes(x=sc_pro, y = factor(sel_ihe), fill = stat(x))) +
+  geom_density_ridges_gradient() +
+  scale_fill_viridis(name = "Score", option = "G") +
+  labs(title = "University's SEL and score",
+       x = "SABER Pro score",
+       y = "socioeconomic level")
+
+```
+
+### Parent education
+
+Students whose parents had a tertiary or upper high-school education seem to perform slightly better than students in the other group. However, if there was an effect of parents' education on students' performance, it can not be seen evidently from this chart.
+
+```{r SABER Pro - parent edu, histogram, message=FALSE, warning=FALSE, cache=TRUE, echo=FALSE, out.width="75%"}
+# Histogram
+data %>%
+  filter(is.na(highest_edu_parent) == FALSE) %>%
+  ggplot(aes(x=sc_pro, y = factor(highest_edu_parent), fill = stat(x))) +
+  geom_density_ridges_gradient() +
+  scale_fill_viridis(name = "Score", option = "H") +
+  labs(title = "Does parent education helps increase students' score?",
+       x = "SABER Pro score",
+       y = "Highest parent education level")
+
+```
+
+### High school
+
+Scores of students from private high schools have an interquartile range (IQR) spreading between 153 and 185 points. Meanwhile, the same IQR for public high schools is from 142 to 172 points, which is lower than the previous one. As such, students from private schools tend to score higher.
+
+```{r, echo = FALSE, out.width = '75%', out.height= '65%', cache=TRUE}
+# Box plot
+
+data %>%
+  ggplot() +
+  geom_boxplot(aes(y = sc_pro, x = as.character(private_high_school),
+                   fill = factor(private_high_school,
+                                 level = c(0, 1),
+                                 labels = c("Public", "Private")))) +
+  labs(x = "Type of High School",
+       y = "Score",
+       fill = "Nature of High School",
+       title = "Private or Public school students perform better?") +
+  scale_fill_brewer(palette = "Set2") -> fig
+
+ggplotly(fig)
+```
+
+### Internet
+
+The chart below shows the SABER Pro score distribution of 2 groups of students, depending on whether they have internet access at home. We can see that the density curve of the group having internet access at home is skewed to the right compared to the same curve of the other group. In short, internet availability is associated with higher scores in the SABER Pro examination.
+
+```{r Internet, message=FALSE, echo= FALSE, warning=FALSE, cache=TRUE, out.width = '75%', out.height='75%'}
+
+data %>%
+  mutate(internet_avail = case_when(internet == 1 ~ "Available",
+                                    internet == 0 ~ "Unavailable")) %>%
+  ggplot(aes(x = sc_pro, fill = internet_avail)) +
+  geom_histogram(aes(y = after_stat(density)), alpha= 0.5, position = "identity") +
+  geom_density(alpha = 0.5) +
+  labs(x = "Score",
+       title = "Does internet help?",
+       fill = "Internet at home") +
+  scale_fill_brewer(palette  = "Dark2") -> fig
+
+ggplotly(fig)
+
+```
+
+# Mutiple-Variables Analysis
+
+## Bivariate analysis's risk of error
+
+So far, we have examined the relations between the SABER Pro score and different factors and discovered some association between them, as outlined above. However, these patterns were recognized based on simple bivariate analysis, which does possess certain error risks.
+
+For example, we have found that students from wealthier families also tend to have higher SABER Pro scores. However, if we compare SABER Pro scores within groups of students with similar academic achievements in the past (SABER 11 scores), the trend mentioned before between family wealth and achievement disappears.
+
+The figure below illustrates this phenomenon. When we use the whole data set for analysis, we see that the SABER Pro score distributions of the wealthier groups shift rightward. But when comparing only within a particular group of students with the same academic performance in the past, say, students whose SABER 11 scores ranged from the 45th percentile to the 55th percentile, the rightward shifting trend no longer be apparent. Richers' score distributions even tend to skew to the left, implying that when a poor student gets the same SABER 11 score as a rich student, they can perform as well as the rich one in the SABER Pro examination, or even better. As such, family income may be irrelevant when predicting the SABER Pro score when we take SABER 11 scores into account.
+
+```{r histogram, message=FALSE, warning=FALSE, cache=TRUE, echo=FALSE, out.width="75%", out.height= '75%'}
+# Histogram
+data %>%
+  filter(is.na(income) == FALSE) %>%
+  ggplot(aes(x=sc_pro, y = income, fill = stat(x))) +
+  geom_density_ridges_gradient(scale = 3, size = 0.3, rel_min_height = 0.01) +
+  scale_fill_viridis(limits = c(75, 250), name = "Score", option = "G") +
+  labs(title = "Global data",
+       x = "SABER Pro score",
+       y = "Family income")+
+  xlim(50, 250)
+```
+
+```{r Local data, message=FALSE, warning=FALSE, cache=TRUE, echo=FALSE, out.width="75%", out.height= '75%'}
+q = quantile(data$sc_s11, probs = c(0.45,0.55))
+
+data %>%
+  filter(is.na(income) == FALSE) %>%
+  filter(sc_s11 >=  q[1] && sc_s11 <=  q[2]) %>%
+  ggplot(aes(x=sc_pro, y = income, fill = stat(x))) +
+  geom_density_ridges_gradient(scale = 3, size = 0.3, rel_min_height = 0.01) +
+  scale_fill_viridis(limits = c(75, 250), name = "Score", option = "G") +
+  labs(title = "Local data: 45-55th percentile of SABER 11 scores",
+       x = "SABER Pro score",
+       y = "Family income") +
+  xlim(50, 250)
+
+
+```
+
+
+## The regression model
+
+To minimize the risks of error, it is necessary to assess the impacts of multiple variables simultaneously. This method of analysis is called Multivariate Regression Analysis. In the below section, I will perform this kind of analysis, using the following variables to explain students' SABER Pro score (`sc_pro`):
+
+-   SABER 11 score (`sc_s11`),
+
+-   Gender (`female`),
+
+-   Family income (`income`),
+
+-   Highest parental education (`highest_edu_parent`),
+
+-   Availability availability of the internet (`internet`),
+
+-   Ownership type of students' high school (`private_high_school`),
+
+-   The socioeconomic level of the place where the student lives (`sel`), and
+
+-   The socioeconomic level of the place where the university is located (`sel_ihe`).
+
+```{r Plot regression, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+library("sjPlot")
+
+regression_model = lm(data = data, formula = "sc_pro ~ sc_s11 + female + income + highest_edu_parent + internet + private_high_school + factor(sel) + factor(sel_ihe)") 
+```
+
+
+## Interpreting regression results {.tabset}
+
+Below is a chart showing the estimated impact of different factors on the SABER Pro score. Specifically, the `sa_s11`'s coefficient of 1.8 means that, on average, students with one point higher than the others in the SABER 11 exam tend to score 1.8 points higher in the SABER Pro examination. Also, the p-value corresponding to `sa_s11` is very small, showing that we have a high confidence level in this result.
+
+*Note: Confidence level =* $(1 - p-value)*100\%$
+
+We can interpret other coefficients and p-value similarly. On average, all other things are equal:
+
+-   Female students have a higher SABER Pro score than male students by 0.53 points. We can be confident about this statement at a 95 per cent level.
+
+-   Students with a family income of more than five minimum monthly wages (MMWs) have lower SABER Pro test scores than students with a family income of less than one MMW, from 1.64 to 3.27 points. The confidence level is at 95.1% or above.
+
+-   Students from areas with socioeconomic level 3 and level 4 have higher scores than those with socioeconomic level 1 by 1.06-1.4 points. The confidence level is 93.1% and 98.9%, respectively. - Students who can access the internet at home tend to score 1.19 points higher than their disadvantaged counterparts.
+
+-   Students of the universities in areas with socioeconomic levels 2, 3, and 4 score higher than those with socioeconomic level 1, respectively, by 3.01, 6.85, and 7.07 points.
+
+The model also estimates the impact of the other factors, including ownership type of high school, parents' highest education level, etc. However, these estimations only accompany confidence levels of less than 90% - a threshold below which we should not accept the estimations as statistically significant. Thus, we should not draw conclusions regarding their predictability for the SABER Pro score.
+
+### Regression results table
+
+```{r Summary regression results, echo = FALSE, esults = 'asis', cache=TRUE}
+library("jtools")
+library("kableExtra")
+
+summ(regression_model,
+     model.info = FALSE)
+```
+
+### Regression results chart
+*Note: The chart below show show estimated coefficients by the regression model (white and small circle at the middle of each line). While the blue line show us the 90% confidence interval of each predictor - which mean if we collect the same data set 100 more times, there will be 90 times the estimated coefficient fall between this line.*
+
+```{r Plot Summary, echo=FALSE, cache=TRUE, out.width='80%'}
+
+plot_summs(regression_model,
+           ci_level = 0.95,
+           omit.coefs = "(Intercept)")+
+  labs(title ="",
+       x = "",
+       y = "")
+```
+
+# Main findings and Implications
+
+We have outlined some characteristics of students likely to perform better on the SABER Pro examination, including having a high SABER 11 score, being female (which is a slight advantage), coming from an area with a high socioeconomic level, and having internet access at home. With all other conditions being equal, students originating from wealthy families tend to score lower in the SABER Pro examination than their poorer peers.
+
+However, we should interpret these findings with caution. While the mentioned trends hold in general, applying the model strictly to every individual student is faulty. Indeed, although the regression model has a relatively high R-square of 0.6, meaning that the model can explain 60% of the difference in SABER Pro scores, this number also warns us that the remaining 40% depends on other factors which are not represented in the data, such as motivation of each individual student. Therefore, if we rely too much on these trends for enrollment decisions, we risk losing talented students that do not possess the above-mentioned characteristics.
+
+In light of this understanding, I am going present some implications for the University as follows:
+
+-   The characteristics discovered above are helpful for pre-screening applicants. At the same time, admissions committees still need to use different methods to comprehensively assess students' abilities and potential, such as requiring personal essays and personal interviews.
+
+-   The University should also consider measures to support students in learning. For example, we found that internet access is associated with better performance in the SABER Pro examination. Therefore, the University should consider digitalizing more of its materials to enlarge the positive impact of the internet. It should also consider providing computers with internet access as a part of the scholarship for students or equipping more computers at the campus.
+
+-   Students originating from low-income families (under one MMW) achieved higher scores than those from families with income above 5 MMWs. Therefore, the school should prioritise the former group of students over the latter group when allocating scholarships and financial aid.
+
+Thank you for reading.
+
